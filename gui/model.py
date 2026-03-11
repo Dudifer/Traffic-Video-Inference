@@ -19,7 +19,7 @@ def runOneFrame(file_path):
             break
 
         results = model.track(frame, tracker="bytetrack.yaml", persist=True, show = True)
-        
+        print(results)
         break 
         # if results[0].boxes.id is not None:
         #     boxes = results[0].boxes
@@ -46,6 +46,7 @@ def testModel(frame, frame_count, fps, track_log):
         source=frame,
         tracker="bytetrack.yaml",
         persist=True,
+        show=True
     )
 
     for r in results:
@@ -74,7 +75,7 @@ def testModel(frame, frame_count, fps, track_log):
     return track_log
 
 
-# if __name__ == "__main__":
-#     print("starting demo")
-#     runOneFrame(video_path)
+if __name__ == "__main__":
+    print("starting demo")
+    runOneFrame(video_path)
     #testModel()
