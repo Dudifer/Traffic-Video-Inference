@@ -1,80 +1,66 @@
-from ultralytics import YOLO 
-import cv2 
+from ultralytics import YOLO
+import cv2
 
-video_path = "C:/Users/Owner/Videos/traffic video.MOV"
 
-def runOneFrame(file_path):
-    video = cv2.VideoCapture(file_path)
-
-    fps = video.get(cv2.CAP_PROP_FPS)
-    current_frame = 0
-
-    vehicles = {}
-
-    model = YOLO("yolov8n.pt")  # nano model (fast)
-
-    while True:
-        ret, frame = video.read()
-        if not ret:
-            break
-
-        results = model.track(frame, tracker="bytetrack.yaml", persist=True, show = True)
-        
-        break 
-        # if results[0].boxes.id is not None:
-        #     boxes = results[0].boxes
-        #     for box in results[0].boxes:
-
-# import threading
-
-# def upload_video():
-#     file_path = filedialog.askopenfilename(
-#         filetypes=[("Video Files", "*.mp4 *.avi *.mov")]
-#     )
-
-#     if file_path:
-#         threading.Thread(
-#             target=run_inference,
-#             args=(file_path,)
-#         ).start()
-
-def testModel(frame, frame_count, fps, track_log):
-    print("running model test")
+def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tuple[dict, int]:
+    """
+    Run YOLO tracking over the full video in one call.
+    Saves an annotated copy of the video with bounding boxes drawn.
+    Returns (track_log, frame_count).
+    """
     model = YOLO("yolov8n.pt")
 
+    # Read video properties for the output writer
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
     results = model.track(
-        source=frame,
+        source=video_path,
         tracker="bytetrack.yaml",
+        show=True,
         persist=True,
+        stream=True
     )
 
-    for r in results:
+    track_log = {}
+    processed = 0
+
+    for frame_idx, r in enumerate(results):
+        now = frame_idx / fps
+
+        # Write annotated frame to output video
+        annotated_frame = r.plot()  # draws boxes, track IDs, and class labels
+        writer.write(annotated_frame)
+
         boxes = r.boxes
-        for box in boxes:
-            track_id = int(box.id.item()) if box.id is not None else None
-            class_id = int(box.cls.item()) if box.cls is not None else None
-            confidence = float(box.conf.item()) if box.conf is not None else None
+        if boxes is not None:
+            for box in boxes:
+                track_id = int(box.id.item()) if box.id is not None else None
+                class_id = int(box.cls.item()) if box.cls is not None else None
+                confidence = float(box.conf.item()) if box.conf is not None else None
 
-            if track_id is None:
-                continue
+                if track_id is None:
+                    continue
 
-            now = frame_count / fps
+                if track_id not in track_log:
+                    track_log[track_id] = {
+                        "class_id": class_id,
+                        "confidence": confidence,
+                        "first_seen": now,
+                        "last_seen": now
+                    }
+                else:
+                    track_log[track_id]["last_seen"] = now
+                    track_log[track_id]["confidence"] = confidence
 
-            if track_id not in track_log:
-                track_log[track_id] = {
-                    "class_id": class_id,
-                    "confidence": confidence,
-                    "first_seen": now,
-                    "last_seen": now
-                }
-            else:
-                track_log[track_id]["last_seen"] = now
-                track_log[track_id]["confidence"] = confidence
+        processed += 1
 
-    return track_log
+    writer.release()
 
-
-# if __name__ == "__main__":
-#     print("starting demo")
-#     runOneFrame(video_path)
-    #testModel()
+    return track_log, processed

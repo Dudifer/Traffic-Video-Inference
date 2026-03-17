@@ -1,18 +1,11 @@
 from fastapi import FastAPI, UploadFile, File
-import cv2
 import tempfile
 import shutil
-import numpy as np
-import json
-import time 
 import pysqlite3 as sql
-from gui.model import testModel
+from gui.model import runOnVideo
 
 app = FastAPI()
 
-# tracks first_seen and last_seen timestamps per track_id
-track_log = {}
-fps = 30
 
 @app.get("/")
 def health_check():
@@ -21,31 +14,16 @@ def health_check():
 
 @app.post("/infer")
 async def infer(file: UploadFile = File(...)):
-    track_log = {}
     # Save uploaded video to a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         shutil.copyfileobj(file.file, tmp)
         temp_path = tmp.name
 
-    cap = cv2.VideoCapture(temp_path)
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    # Run YOLO tracking over the full video, saving annotated output alongside the DB
+    annotated_path = tempfile.mktemp(suffix="_annotated.mp4")
+    track_log, frame_count = runOnVideo(temp_path, output_path=annotated_path)
 
-    results = []
-
-    frame_count = 0
-    while True:
-        success, frame = cap.read()
-        if not success:
-            print("End of video reached or failed to read frame.")
-            break
-
-        if frame_count % 30 == 0:
-            track_log = testModel(frame, frame_count, fps, track_log)
-
-        frame_count += 1
-
-    cap.release()
-
+    # Persist results to SQLite
     conn = sql.connect("detections.db")
     cursor = conn.cursor()
 
@@ -72,6 +50,7 @@ async def infer(file: UploadFile = File(...)):
 
     return {
         "frames_processed": frame_count,
+        "annotated_video": annotated_path,
         "detections": [
             {
                 "track_id": r[0],
@@ -83,16 +62,3 @@ async def infer(file: UploadFile = File(...)):
             } for r in rows
         ]
     }
-
-    return {
-        "frames_processed": frame_count,
-        "detections": results
-    }
-
-
-#print(response.json())
-
-
-
-# uvicorn app:app --reload
-# python tkinter_app.py
