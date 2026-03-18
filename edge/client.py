@@ -1,8 +1,10 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse, FileResponse
 import tempfile
 import shutil
 import pysqlite3 as sql
-from gui.model import runOnVideo
+import cv2
+from gui.model import runOnVideo, runOnVideoStream
 
 app = FastAPI()
 
@@ -19,7 +21,7 @@ async def infer(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, tmp)
         temp_path = tmp.name
 
-    # Run YOLO tracking over the full video, saving annotated output alongside the DB
+    # Run YOLO tracking over the full video, saving annotated output
     annotated_path = tempfile.mktemp(suffix="_annotated.mp4")
     track_log, frame_count = runOnVideo(temp_path, output_path=annotated_path)
 
@@ -62,3 +64,32 @@ async def infer(file: UploadFile = File(...)):
             } for r in rows
         ]
     }
+
+
+@app.post("/stream")
+async def stream(file: UploadFile = File(...)):
+    """Stream annotated frames as MJPEG back to the local machine."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        temp_path = tmp.name
+
+    def generate():
+        for frame in runOnVideoStream(temp_path):
+            _, jpeg = cv2.imencode(".jpg", frame)
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" +
+                jpeg.tobytes() +
+                b"\r\n"
+            )
+
+    return StreamingResponse(
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@app.get("/download")
+def download(path: str):
+    """Serve an annotated video file back to the local machine."""
+    return FileResponse(path, media_type="video/mp4", filename="annotated_output.mp4")

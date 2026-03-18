@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 import cv2
+from typing import Generator
 
 
 def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tuple[dict, int]:
@@ -10,7 +11,6 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
     """
     model = YOLO("yolov8n.pt")
 
-    # Read video properties for the output writer
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -23,7 +23,6 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
     results = model.track(
         source=video_path,
         tracker="bytetrack.yaml",
-        show=True,
         persist=True,
         stream=True
     )
@@ -34,8 +33,7 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
     for frame_idx, r in enumerate(results):
         now = frame_idx / fps
 
-        # Write annotated frame to output video
-        annotated_frame = r.plot()  # draws boxes, track IDs, and class labels
+        annotated_frame = r.plot()
         writer.write(annotated_frame)
 
         boxes = r.boxes
@@ -62,5 +60,21 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
         processed += 1
 
     writer.release()
-
     return track_log, processed
+
+
+def runOnVideoStream(video_path: str) -> Generator:
+    """
+    Run YOLO tracking and yield each annotated frame for live streaming.
+    """
+    model = YOLO("yolov8n.pt")
+
+    results = model.track(
+        source=video_path,
+        tracker="bytetrack.yaml",
+        persist=True,
+        stream=True
+    )
+
+    for r in results:
+        yield r.plot()
