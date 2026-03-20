@@ -9,7 +9,7 @@ import tempfile
 import cv2
 import numpy as np
 
-SERVER = "http://3.148.247.151:8000"
+SERVER = "http://18.216.106.166:8000"
 
 def upload_video():
     file_path = filedialog.askopenfilename(
