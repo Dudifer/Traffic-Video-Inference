@@ -11,6 +11,32 @@ import numpy as np
 
 SERVER = "http://18.216.106.166:8000"
 
+# --- Status window ---
+
+status_win = None
+status_label = None
+
+def show_status_window():
+    global status_win, status_label
+    status_win = tk.Toplevel(root)
+    status_win.title("Status")
+    status_win.geometry("360x80")
+    status_win.resizable(False, False)
+    status_win.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent closing manually
+    status_label = tk.Label(status_win, text="", padx=16, pady=20, anchor="w", justify="left")
+    status_label.pack(fill=tk.BOTH, expand=True)
+
+def set_status(msg):
+    """Update the status window label (thread-safe)."""
+    if status_label:
+        root.after(0, lambda: status_label.config(text=msg))
+
+def hide_status_window():
+    if status_win:
+        root.after(0, status_win.destroy)
+
+# --- Core logic ---
+
 def upload_video():
     file_path = filedialog.askopenfilename(
         filetypes=[("Video Files", "*.mp4 *.avi *.mov")]
@@ -20,25 +46,37 @@ def upload_video():
         return
 
     root.withdraw()
+    show_status_window()
 
     if show_var.get():
-        # Send to /stream and display frames locally
         threading.Thread(target=stream_video, args=(file_path,), daemon=True).start()
     else:
-        # Send to /infer and show results table
-        try:
-            with open(file_path, "rb") as f:
-                files = {"file": (file_path, f, "video/mp4")}
-                response = requests.post(f"{SERVER}/infer", files=files)
-                data = response.json()
-                show_results(data)
-        except Exception as e:
-            root.deiconify()
-            raise e
+        threading.Thread(target=run_infer, args=(file_path,), daemon=True).start()
+
+
+def run_infer(file_path: str):
+    try:
+        set_status("Uploading video to server...")
+        with open(file_path, "rb") as f:
+            files = {"file": (file_path, f, "video/mp4")}
+            response = requests.post(f"{SERVER}/infer", files=files)
+
+        set_status("Running inference...")
+        data = response.json()
+
+        set_status("Inference complete. Loading results...")
+        hide_status_window()
+        root.after(0, lambda: show_results(data))
+    except Exception as e:
+        set_status(f"Error: {e}")
+        hide_status_window()
+        root.after(0, root.deiconify)
+        raise e
 
 
 def stream_video(file_path: str):
     """POST video to /stream and display MJPEG frames in a local OpenCV window."""
+    set_status("Uploading video for live preview...")
     with open(file_path, "rb") as f:
         response = requests.post(
             f"{SERVER}/stream",
@@ -46,10 +84,10 @@ def stream_video(file_path: str):
             stream=True
         )
 
+    set_status("Streaming — press Q to stop.")
     buffer = b""
     for chunk in response.iter_content(chunk_size=4096):
         buffer += chunk
-        # Each MJPEG frame is delimited by --frame boundaries
         start = buffer.find(b"\xff\xd8")  # JPEG start
         end = buffer.find(b"\xff\xd9")    # JPEG end
         if start != -1 and end != -1:
@@ -62,16 +100,29 @@ def stream_video(file_path: str):
                     break
 
     cv2.destroyAllWindows()
-    root.after(0, root.deiconify)
+
+    # Fetch results after streaming completes
+    set_status("Fetching results...")
+    try:
+        result = requests.post(f"{SERVER}/infer", files={"file": (file_path, open(file_path, "rb"), "video/mp4")})
+        data = result.json()
+        hide_status_window()
+        root.after(0, lambda: show_results(data))
+    except Exception as e:
+        set_status(f"Error fetching results: {e}")
+        hide_status_window()
+        root.after(0, root.deiconify)
 
 
 def download_and_open(remote_path):
     """Download the annotated video from the server and open it locally."""
+    set_status("Downloading annotated video...")
     response = requests.get(f"{SERVER}/download", params={"path": remote_path}, stream=True)
     local_path = os.path.join(tempfile.gettempdir(), "annotated_output.mp4")
     with open(local_path, "wb") as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
+    set_status("Download complete. Opening video...")
     open_video(local_path)
 
 def open_video(path):
@@ -88,7 +139,7 @@ def show_results(data):
     win.title("Inference Results")
     win.geometry("600x450")
 
-    win.protocol("WM_DELETE_WINDOW", lambda: [win.destroy(), root.deiconify()])
+    win.protocol("WM_DELETE_WINDOW", lambda: root.destroy())
 
     text = tk.Text(win, wrap=tk.WORD, padx=10, pady=10)
     text.pack(expand=True, fill=tk.BOTH)
