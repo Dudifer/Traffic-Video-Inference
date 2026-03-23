@@ -147,7 +147,7 @@ def show_results(data):
     text.pack(expand=True, fill=tk.BOTH)
 
     text.insert(tk.END, f"Frames processed: {data['frames_processed']}\n\n")
-    text.insert(tk.END, f"{'Track ID':<12}{'Class':<16}{'Confidence':<14}{'Duration (s)':<12}\n")
+    text.insert(tk.END, f"{'Track ID':<12}{'Class (ID)':<16}{'Confidence':<14}{'Duration (s)':<12}\n")
     text.insert(tk.END, "-" * 54 + "\n")
 
     for d in data["detections"]:
