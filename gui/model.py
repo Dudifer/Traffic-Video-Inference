@@ -3,13 +3,18 @@ import cv2
 from typing import Generator
 
 
-def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tuple[dict, int]:
+def _load_model():
+    return YOLO("yolov8n.pt")
+
+
+def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tuple[dict, int, dict]:
     """
     Run YOLO tracking over the full video in one call.
     Saves an annotated copy of the video with bounding boxes drawn.
-    Returns (track_log, frame_count).
+    Returns (track_log, frame_count, class_names).
     """
-    model = YOLO("yolov8n.pt")
+    model = _load_model()
+    class_names = model.names  # {0: 'person', 2: 'car', 5: 'bus', 7: 'truck', ...}
 
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
@@ -49,6 +54,7 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
                 if track_id not in track_log:
                     track_log[track_id] = {
                         "class_id": class_id,
+                        "class_name": class_names.get(class_id, "unknown"),
                         "confidence": confidence,
                         "first_seen": now,
                         "last_seen": now
@@ -60,14 +66,16 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
         processed += 1
 
     writer.release()
-    return track_log, processed
+    return track_log, processed, class_names
 
 
 def runOnVideoStream(video_path: str) -> Generator:
     """
-    Run YOLO tracking and yield each annotated frame for live streaming.
+    Run YOLO tracking and yield (annotated_frame, track_log, class_names) per frame.
+    track_log is updated in place — the final yield reflects the complete session.
     """
-    model = YOLO("yolov8n.pt")
+    model = _load_model()
+    class_names = model.names
 
     results = model.track(
         source=video_path,
@@ -76,5 +84,35 @@ def runOnVideoStream(video_path: str) -> Generator:
         stream=True
     )
 
-    for r in results:
-        yield r.plot()
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    cap.release()
+
+    track_log = {}
+
+    for frame_idx, r in enumerate(results):
+        now = frame_idx / fps
+
+        boxes = r.boxes
+        if boxes is not None:
+            for box in boxes:
+                track_id = int(box.id.item()) if box.id is not None else None
+                class_id = int(box.cls.item()) if box.cls is not None else None
+                confidence = float(box.conf.item()) if box.conf is not None else None
+
+                if track_id is None:
+                    continue
+
+                if track_id not in track_log:
+                    track_log[track_id] = {
+                        "class_id": class_id,
+                        "class_name": class_names.get(class_id, "unknown"),
+                        "confidence": confidence,
+                        "first_seen": now,
+                        "last_seen": now
+                    }
+                else:
+                    track_log[track_id]["last_seen"] = now
+                    track_log[track_id]["confidence"] = confidence
+
+        yield r.plot(), track_log, class_names

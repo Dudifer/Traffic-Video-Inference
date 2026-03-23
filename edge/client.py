@@ -1,95 +1,189 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import StreamingResponse, FileResponse
+import tkinter as tk
+from tkinter import filedialog
+import requests
+import subprocess
+import sys
+import threading
+import os
 import tempfile
-import shutil
-import pysqlite3 as sql
 import cv2
-from gui.model import runOnVideo, runOnVideoStream
+import numpy as np
 
-app = FastAPI()
+SERVER = "http://18.216.106.166:8000"
 
+# --- Status window ---
 
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
+status_win = None
+status_label = None
 
+def show_status_window():
+    global status_win, status_label
+    status_win = tk.Toplevel(root)
+    status_win.title("Status")
+    status_win.geometry("360x80")
+    status_win.resizable(False, False)
+    status_win.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent closing manually
+    status_label = tk.Label(status_win, text="", padx=16, pady=20, anchor="w", justify="left")
+    status_label.pack(fill=tk.BOTH, expand=True)
 
-@app.post("/infer")
-async def infer(file: UploadFile = File(...)):
-    # Save uploaded video to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        temp_path = tmp.name
+def set_status(msg):
+    """Update the status window label (thread-safe)."""
+    if status_label:
+        root.after(0, lambda: status_label.config(text=msg))
 
-    # Run YOLO tracking over the full video, saving annotated output
-    annotated_path = tempfile.mktemp(suffix="_annotated.mp4")
-    track_log, frame_count = runOnVideo(temp_path, output_path=annotated_path)
+def hide_status_window():
+    if status_win:
+        root.after(0, status_win.destroy)
 
-    # Persist results to SQLite
-    conn = sql.connect("detections.db")
-    cursor = conn.cursor()
+# --- Core logic ---
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS detections (
-            track_id INTEGER,
-            class_id INTEGER,
-            confidence REAL,
-            first_seen REAL,
-            last_seen REAL,
-            duration REAL
-        )
-    """)
-
-    rows = []
-    for track_id, data in track_log.items():
-        duration = data["last_seen"] - data["first_seen"]
-        row = (track_id, data["class_id"], data["confidence"], data["first_seen"], data["last_seen"], duration)
-        rows.append(row)
-        cursor.execute("INSERT INTO detections VALUES (?,?,?,?,?,?)", row)
-
-    conn.commit()
-    conn.close()
-
-    return {
-        "frames_processed": frame_count,
-        "annotated_video": annotated_path,
-        "detections": [
-            {
-                "track_id": r[0],
-                "class_id": r[1],
-                "confidence": r[2],
-                "first_seen": r[3],
-                "last_seen": r[4],
-                "duration": r[5]
-            } for r in rows
-        ]
-    }
-
-
-@app.post("/stream")
-async def stream(file: UploadFile = File(...)):
-    """Stream annotated frames as MJPEG back to the local machine."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        temp_path = tmp.name
-
-    def generate():
-        for frame in runOnVideoStream(temp_path):
-            _, jpeg = cv2.imencode(".jpg", frame)
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" +
-                jpeg.tobytes() +
-                b"\r\n"
-            )
-
-    return StreamingResponse(
-        generate(),
-        media_type="multipart/x-mixed-replace; boundary=frame"
+def upload_video():
+    file_path = filedialog.askopenfilename(
+        filetypes=[("Video Files", "*.mp4 *.avi *.mov")]
     )
 
+    if not file_path:
+        return
 
-@app.get("/download")
-def download(path: str):
-    """Serve an annotated video file back to the local machine."""
-    return FileResponse(path, media_type="video/mp4", filename="annotated_output.mp4")
+    root.withdraw()
+    show_status_window()
+
+    if show_var.get():
+        threading.Thread(target=stream_video, args=(file_path,), daemon=True).start()
+    else:
+        threading.Thread(target=run_infer, args=(file_path,), daemon=True).start()
+
+
+def run_infer(file_path: str):
+    try:
+        set_status("Uploading video to server...")
+        with open(file_path, "rb") as f:
+            files = {"file": (file_path, f, "video/mp4")}
+            response = requests.post(f"{SERVER}/infer", files=files)
+
+        set_status("Running inference...")
+        data = response.json()
+
+        set_status("Inference complete. Loading results...")
+        hide_status_window()
+        root.after(0, lambda: show_results(data))
+    except Exception as e:
+        set_status(f"Error: {e}")
+        hide_status_window()
+        root.after(0, root.deiconify)
+        raise e
+
+
+def stream_video(file_path: str):
+    """POST video to /stream and display MJPEG frames in a local OpenCV window."""
+    set_status("Uploading video for live preview...")
+    with open(file_path, "rb") as f:
+        response = requests.post(
+            f"{SERVER}/stream",
+            files={"file": (file_path, f, "video/mp4")},
+            stream=True
+        )
+
+    session_id = response.headers.get("X-Session-ID")
+
+    set_status("Streaming — press Q to stop.")
+    buffer = b""
+    for chunk in response.iter_content(chunk_size=4096):
+        buffer += chunk
+        start = buffer.find(b"\xff\xd8")  # JPEG start
+        end = buffer.find(b"\xff\xd9")    # JPEG end
+        if start != -1 and end != -1:
+            jpg = buffer[start:end + 2]
+            buffer = buffer[end + 2:]
+            frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if frame is not None:
+                cv2.imshow("Live Inference", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+
+    cv2.destroyAllWindows()
+
+    # Fetch results using the session ID returned from /stream
+    set_status("Fetching results...")
+    try:
+        result = requests.get(f"{SERVER}/results/{session_id}")
+        data = result.json()
+        hide_status_window()
+        root.after(0, lambda: show_results(data))
+    except Exception as e:
+        set_status(f"Error fetching results: {e}")
+        hide_status_window()
+        root.after(0, root.deiconify)
+
+
+def download_and_open(remote_path):
+    """Download the annotated video from the server and open it locally."""
+    set_status("Downloading annotated video...")
+    response = requests.get(f"{SERVER}/download", params={"path": remote_path}, stream=True)
+    local_path = os.path.join(tempfile.gettempdir(), "annotated_output.mp4")
+    with open(local_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+    set_status("Download complete. Opening video...")
+    open_video(local_path)
+
+def open_video(path):
+    """Open the annotated video in the system default player."""
+    if sys.platform == "win32":
+        subprocess.Popen(["start", "", path], shell=True)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
+def show_results(data):
+    win = tk.Toplevel(root)
+    win.title("Inference Results")
+    win.geometry("600x450")
+
+    win.protocol("WM_DELETE_WINDOW", lambda: root.destroy())
+
+    text = tk.Text(win, wrap=tk.WORD, padx=10, pady=10)
+    text.pack(expand=True, fill=tk.BOTH)
+
+    text.insert(tk.END, f"Frames processed: {data['frames_processed']}\n\n")
+    text.insert(tk.END, f"{'Track ID':<12}{'Class':<16}{'Confidence':<14}{'Duration (s)':<12}\n")
+    text.insert(tk.END, "-" * 54 + "\n")
+
+    for d in data["detections"]:
+        class_label = f"{d.get('class_name', 'unknown')} ({d['class_id']})"
+        text.insert(tk.END,
+            f"{d['track_id']:<12}{class_label:<16}{d['confidence']:<14.2f}{d['duration']:<12.2f}\n"
+        )
+
+    text.config(state=tk.DISABLED)
+
+    annotated_path = data.get("annotated_video")
+    if annotated_path:
+        frame = tk.Frame(win, pady=6)
+        frame.pack(fill=tk.X, padx=10)
+        tk.Label(frame, text=f"Annotated video: {annotated_path}", anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(frame, text="▶ Open", command=lambda: threading.Thread(target=download_and_open, args=(annotated_path,), daemon=True).start()).pack(side=tk.RIGHT)
+
+root = tk.Tk()
+root.title("Intersection Car Analyzer")
+root.geometry("800x400")
+
+show_var = tk.BooleanVar(value=False)
+
+upload_button = tk.Button(
+    root,
+    text="Upload Video",
+    command=upload_video,
+    height=4,
+    width=24
+)
+upload_button.pack(pady=50)
+
+tk.Checkbutton(
+    root,
+    text="Show live preview during inference",
+    variable=show_var
+).pack()
+
+root.mainloop()
