@@ -84,6 +84,8 @@ def stream_video(file_path: str):
             stream=True
         )
 
+    session_id = response.headers.get("X-Session-ID")
+
     set_status("Streaming — press Q to stop.")
     buffer = b""
     for chunk in response.iter_content(chunk_size=4096):
@@ -101,10 +103,10 @@ def stream_video(file_path: str):
 
     cv2.destroyAllWindows()
 
-    # Fetch results after streaming completes
+    # Fetch results using the session ID returned from /stream
     set_status("Fetching results...")
     try:
-        result = requests.post(f"{SERVER}/infer", files={"file": (file_path, open(file_path, "rb"), "video/mp4")})
+        result = requests.get(f"{SERVER}/results/{session_id}")
         data = result.json()
         hide_status_window()
         root.after(0, lambda: show_results(data))
@@ -145,12 +147,13 @@ def show_results(data):
     text.pack(expand=True, fill=tk.BOTH)
 
     text.insert(tk.END, f"Frames processed: {data['frames_processed']}\n\n")
-    text.insert(tk.END, f"{'Track ID':<12}{'Class ID':<12}{'Confidence':<14}{'Duration (s)':<12}\n")
-    text.insert(tk.END, "-" * 50 + "\n")
+    text.insert(tk.END, f"{'Track ID':<12}{'Class':<16}{'Confidence':<14}{'Duration (s)':<12}\n")
+    text.insert(tk.END, "-" * 54 + "\n")
 
     for d in data["detections"]:
+        class_label = f"{d.get('class_name', 'unknown')} ({d['class_id']})"
         text.insert(tk.END,
-            f"{d['track_id']:<12}{d['class_id']:<12}{d['confidence']:<14.2f}{d['duration']:<12.2f}\n"
+            f"{d['track_id']:<12}{class_label:<16}{d['confidence']:<14.2f}{d['duration']:<12.2f}\n"
         )
 
     text.config(state=tk.DISABLED)
