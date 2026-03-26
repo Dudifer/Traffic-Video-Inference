@@ -81,7 +81,8 @@ def runOnVideoStream(video_path: str) -> Generator:
         source=video_path,
         tracker="bytetrack.yaml",
         persist=True,
-        stream=True
+        stream=True,
+        conf=0.55
     )
 
     cap = cv2.VideoCapture(video_path)
