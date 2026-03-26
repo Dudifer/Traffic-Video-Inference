@@ -5,22 +5,13 @@
 ---
 
 ## Demo
-
-<!-- INSERT 2-3 MINUTE DEMO VIDEO HERE -->
-<!-- Suggested script:
-  1. Start ML server on EC2
-  2. Run client, upload a video
-  3. Show live detections streaming frame-by-frame
-  4. Review results table post-inference
-  5. Download and play back the annotated video
-  Narration: "This simulates roadside hardware detecting vehicles and sending frames to a centralized inference service."
--->
+c:\Users\Owner\Videos\Captures\Smash\2026-03-25 17-51-49.mp4
 
 ---
 
 ## Architecture
 
-<!-- INSERT ARCHITECTURE DIAGRAM HERE (exported from README.docx or screenshot of the diagram above) -->
+![alt text](<Screenshot 2026-03-25 180207.png>)
 
 | Component | Where | Responsibility |
 |---|---|---|
@@ -35,13 +26,13 @@
 ## Screenshots
 
 ### Upload window
-<!-- INSERT SCREENSHOT — upload window with live preview checkbox -->
-
-### Inference results
-<!-- INSERT SCREENSHOT — results table showing track ID, class ID, confidence, duration -->
+c:\Users\Owner\Pictures\Screenshots\Screenshot 2026-03-25 175821.png
 
 ### Live preview
-<!-- INSERT SCREENSHOT — OpenCV window showing annotated frames during inference -->
+![alt text](<Screenshot 2026-03-25 175858.png>)
+
+### Inference results
+![alt text](<Screenshot 2026-03-25 175943.png>)
 
 ---
 
@@ -101,8 +92,8 @@ Running inference in the cloud means model updates don't require redeploying edg
 
 | Metric | Value |
 |---|---|
-| Average inference time | XX ms |
-| EC2 instance type | fill in (e.g. t3.medium, g4dn.xlarge) |
+| Average inference time | 50 ms/frame |
+| EC2 instance type | m7i-flex.large |
 | Video resolution tested | 720p |
 | Model | YOLOv8n (nano) |
 
