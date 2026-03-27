@@ -27,7 +27,7 @@
 ## Screenshots
 
 ### Upload window
-c:\Users\Owner\Pictures\Screenshots\Screenshot 2026-03-25 175821.png
+![alt text](<Screenshot 2026-03-25 175821.png>)
 
 ### Live preview
 ![alt text](<Screenshot 2026-03-25 175858.png>)
