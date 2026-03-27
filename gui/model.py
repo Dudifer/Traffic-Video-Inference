@@ -29,7 +29,8 @@ def runOnVideo(video_path: str, output_path: str = "annotated_output.mp4") -> tu
         source=video_path,
         tracker="bytetrack.yaml",
         persist=True,
-        stream=True
+        stream=True,
+        conf=.65
     )
 
     track_log = {}
