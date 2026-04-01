@@ -6,7 +6,7 @@
 
 ## Demo
 
-[![Demo Video](https://drive.google.com/file/d/1RvzGyD0rhSHi-Qv-azApnSm5P7oXAfji/view?usp=sharing)](https://drive.google.com/file/d/1RvzGyD0rhSHi-Qv-azApnSm5P7oXAfji/view?usp=sharing)
+[![Demo Video](play-button.png)](https://drive.google.com/file/d/1RvzGyD0rhSHi-Qv-azApnSm5P7oXAfji/view?usp=sharing)
 
 ---
 
