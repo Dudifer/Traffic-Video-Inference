@@ -6,9 +6,13 @@
 
 ## Demo
 
-<video width="640" height="480" controls>
+<!-- <video width="640" height="480" controls>
   <source src="https://drive.google.com/file/d/1RvzGyD0rhSHi-Qv-azApnSm5P7oXAfji/view?usp=sharing" type="video/mp4">
-</video>
+</video> -->
+
+<iframe src="https://drive.google.com/file/d/1RvzGyD0rhSHi-Qv-azApnSm5P7oXAfji/view?usp=sharing" width="640" height="480" allow="autoplay" allowfullscreen></iframe>
+
+If the video does not appear above (some sites block embedded frames), open it here: [Google Drive video](https://drive.google.com/file/d/1RvzGyD0rhSHi-Qv-azApnSm5P7oXAfji/view?usp=sharing)
 
 ---
 
