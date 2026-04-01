@@ -5,8 +5,7 @@
 ---
 
 ## Demo
-
-[![Demo Video](https://drive.google.com/file/d/1bsneTHbuaZo2mqn0M4hQeYlQUit8x3CN/view?usp=drive_link)](https://drive.google.com/file/d/1bsneTHbuaZo2mqn0M4hQeYlQUit8x3CN/view?usp=drive_link)
+<iframe width="560" height="315" src="https://drive.google.com/file/d/1bsneTHbuaZo2mqn0M4hQeYlQUit8x3CN/view?usp=drive_link" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ---
 
