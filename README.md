@@ -5,7 +5,9 @@
 ---
 
 ## Demo
-<iframe width="560" height="315" src="https://drive.google.com/file/d/1bsneTHbuaZo2mqn0M4hQeYlQUit8x3CN/view?usp=drive_link" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<div style="position: relative; width: 100%; padding-bottom: 56.25%">
+  <iframe src="https://drive.google.com/file/d/1bsneTHbuaZo2mqn0M4hQeYlQUit8x3CN/view?usp=drive_link" title="Video Title" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" style="position: absolute; width: 100%; height: 100%;"></iframe>
+</div>
 
 ---
 
